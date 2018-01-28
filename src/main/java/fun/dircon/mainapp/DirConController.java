@@ -2,7 +2,10 @@ package fun.dircon.mainapp;
 
 import java.io.File;
 
-import javafx.application.Platform;
+import biz.ui.controller.utils.ControllerUtils;
+import fun.dircon.filejob.SelectedFileJob;
+import fun.dircon.filejobdisplay.FileJobDisplayer;
+import fun.dircon.filejobdisplay.FileJobPopUpLauncher;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -10,7 +13,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 
-public class DirConController extends FileUtilController {
+public class DirConController extends ControllerUtils{
 	
     @FXML
     private Button consolidateButton;
@@ -30,8 +33,7 @@ public class DirConController extends FileUtilController {
     
     @FXML
     private RadioButton copyRadioButton;
-	
-	@Override
+
 	public void initialize() {
 		// TODO Auto-generated method stub
 		
@@ -57,83 +59,14 @@ public class DirConController extends FileUtilController {
 	 * they want these files moved or copied and they can choose to only copy files with specific extensions
 	 */
 	public void consolidateParent() {
-		/**
-		 * copy all files in parent directory and sub directories with a particular extension
-		 */
-		if(extCheckBox.isSelected() && copyRadioButton.isSelected()) {
-			// get selected extensions
-			String[] exts = extField.getText().split("[,]");
-			
-			// create new file job and register listener
-			FileJob job = new FileJob(parent, exportDir, new DisplayNotification(), exts);
-			if(exportDir == null) return;
-			
-			// run the job in a new thread
-			Platform.runLater(new DisplayLabelThread(currentFile, "Exporting Files"));
-			Thread copy = job.executeCopy();
-			copy.start();
-		/**
-		 * copy all files in parent directory and sub directories
-		 */
-		}else if(!extCheckBox.isSelected() && copyRadioButton.isSelected()){
-			// create new file job and register listener
-			FileJob job = new FileJob(parent, exportDir, new DisplayNotification(), new String[0]);
-			if(exportDir == null) return;		
-			
-			// run the job in a new thread
-			Platform.runLater(new DisplayLabelThread(currentFile, "Exporting Files"));
-			Thread copy = job.executeCopy();
-			copy.start();
 		
-		/**
-		 * move all files in parent directory and sub directories with a particular extension
-		 */
-		}else if(extCheckBox.isSelected() && !copyRadioButton.isSelected()) {
-			// get selected extensions
-			String[] exts = extField.getText().split("[,]");
-			
-			// create new file job and register listener
-			FileJob job = new FileJob(parent, exportDir, new DisplayNotification(), exts);
-			if(exportDir == null) return;
-			
-			// run the job in a new thread
-			Platform.runLater(new DisplayLabelThread(currentFile, "Exporting Files"));
-			Thread move = job.executeMove();
-			move.start();
-		/**
-		 * copy all files in parent directory and sub directories
-		 */
-		}else {
-			// create new file job and register listener
-			FileJob job = new FileJob(parent, exportDir, new DisplayNotification(), new String[0]);
-			if(exportDir == null) return;		
-			
-			// run the job in a new thread
-			Platform.runLater(new DisplayLabelThread(currentFile, "Exporting Files"));
-			Thread move = job.executeMove();
-			move.start();
-		}
-
-	}
-	
-	/**
-	 * Allows the GUI to display the progress of the move from another thread
-	 * @author karottop
-	 *
-	 */
-	public class DisplayNotification implements FileJob.FileJobListener{
-
-		@Override
-		public void notifyProgress(String progressInfo) {
-			Platform.runLater(new DisplayLabelThread(currentProgress, progressInfo));
-		}
-
-		@Override
-		public void notifyCurrentFile(String currentFileInfo) {
-			Platform.runLater(new DisplayLabelThread(currentFile, currentFileInfo));
-		}
-		
-		
+		if(exportDir == null || parent == null) return;	
+		// create new file job and register listener
+		SelectedFileJob job = new SelectedFileJob(parent,
+				exportDir, new String[0], copyRadioButton.isSelected());
+		FileJobDisplayer jobDisplayer = new FileJobDisplayer(job);
+		FileJobPopUpLauncher launcher = new FileJobPopUpLauncher("Exporting", jobDisplayer);
+		launcher.show();
 	}
 
 }
