@@ -34,11 +34,11 @@ public class FileJob {
 		this.exts = exts != null ? new String[0] : exts;
 		this.bytesMoved = 0;
 
-		if (exts.length == 0) {
-			files = getExtractFiles();
-		} else {
-			files = consolidateFiles();
-		}
+//		if (exts.length == 0) {
+//			files = getExtractFiles();
+//		} else {
+//			files = consolidateFiles();
+//		}
 		this.percentComplete = new AtomicInteger(0);
 
 		long bytes = 0;
@@ -75,6 +75,8 @@ public class FileJob {
 	}
 
 	protected List<File> getExtractFiles(File parent, List<File> files) {
+		if (progressListener != null)
+			progressListener.notifyProgress("Finding Files\nTime Remaining: Unknown");
 		if (parent.isDirectory() && parent.canRead()) {
 			File[] children = parent.listFiles();
 			for (File file : children) {
@@ -83,10 +85,10 @@ public class FileJob {
 
 		} else {
 			System.out.println("Adding File: " + parent.getAbsolutePath());
-			if (progressListener != null)
-				progressListener.notifyCurrentFile(
-						String.format("Adding File: %s\n"
-								+ "Time Remaining: Unknown",parent.getAbsolutePath()));
+			long totalBytes = bytesInFileJob.get() + parent.length();
+			
+			this.bytesInFileJob.set(totalBytes);
+			System.out.println("Bytes To Move: " + this.bytesInFileJob.get());
 			files.add(parent);
 		}
 		return files;
@@ -97,6 +99,8 @@ public class FileJob {
 	}
 
 	protected List<File> consolidateFiles(List<String> exts, File parent, List<File> files) {
+		if (progressListener != null)
+			progressListener.notifyProgress("Finding Files\nTime Remaining: Unknown");
 		if (parent.isDirectory() && parent.canRead()) {
 			File[] children = parent.listFiles();
 			for (File file : children) {
@@ -106,13 +110,11 @@ public class FileJob {
 		} else {
 			for (String ext : exts) {
 				System.out.println("Adding File: " + parent.getAbsolutePath());
-				if (progressListener != null)
-					if (progressListener != null)
-						progressListener.notifyCurrentFile(
-								String.format("Adding File: %s\n"
-										+ "Time Remaining: Unknown",parent.getAbsolutePath()));
-				if (parent.getAbsolutePath().endsWith(ext))
+				if (parent.getAbsolutePath().endsWith(ext)) {
+					long totalBytes = bytesInFileJob.get() + parent.length();
+					this.bytesInFileJob.set(totalBytes);
 					files.add(parent);
+				}
 			}
 
 		}
@@ -127,28 +129,34 @@ public class FileJob {
 	protected void moveFilesToDir(List<File> files) throws FileNotFoundException, IOException {
 		for (File file : files) {
 			long start = System.nanoTime();
+			long bytesInFile = file.length();
 			if (progressListener != null)
 				progressListener.notifyCurrentFile("Exporting File: " + file.getAbsolutePath());
 			String path = exportLocation.getAbsolutePath().replace(Character.toString(File.pathSeparatorChar), "/")
 					+ "/" + file.getName();
-			System.out.println("Exporting File: " + file.getAbsolutePath() + "To: " + path);
+//			System.out.println("Exporting File: " + file.getAbsolutePath() + "To: " + path);
 			// Files.move(file.toPath(), new File(path).toPath());
-			bytesMoved += file.length();
+			bytesMoved += bytesInFile;
+			
 			file.renameTo(new File(path));
-			System.out.println("Bytes moved: " + bytesMoved);
-			System.out.println("Bytes in file: " + this.bytesInFileJob.get());
+//			System.out.println("Bytes moved: " + bytesMoved);
+//			System.out.println("Bytes in file: " + this.bytesInFileJob.get());
 			int percentComplete = (int) (((double) bytesMoved / (double) this.bytesInFileJob.get()) * 100);
 			this.percentComplete.set(percentComplete);
 			long end = System.nanoTime();
 			double elapsedSeconds = (double) (end - start) / 1000000000.0;
-			this.bytesMovedPerSecond = (double)file.length() / (double)elapsedSeconds;
-			System.out.println("File copied successfully!");
-			System.out.println(String.format("Rate of transfer: %.2fkb/s", bytesMovedPerSecond / 1000.0));
-			System.out.println(String.format("Percent Complete: %d", percentComplete));
+			this.bytesMovedPerSecond = (double)bytesInFile / (double)elapsedSeconds;
+			this.recalculateProcessSpeed(bytesMovedPerSecond/1000.0);
+//			System.out.println("File copied successfully!");
+//			System.out.println(String.format("Rate of transfer: %.2fkb/s", bytesMovedPerSecond / 1000.0));
+//			System.out.println("Average Rate of Transfer: " + getAverageRateOfTransfer());
+//			System.out.println(String.format("Percent Complete: %d", percentComplete));
 			if (progressListener != null)
 				progressListener.notifyProgress(String.format(
-						"File moved successfully!\n" + "Rate of transfer: %.2fkb/s\n" + "Percent Complete: %d\n",
-						bytesMovedPerSecond / 1000.0, percentComplete));
+						"Average Rate of transfer: %s\n"
+				+ "Percent Complete: %d\n"
+				+ "Time Remaining: %s",
+						getAverageRateOfTransfer(), percentComplete, getTimeRemaining()));
 
 		}
 
@@ -240,7 +248,7 @@ public class FileJob {
 	
 	public String getAverageRateOfTransfer() {
 		if(this.averageRateOfTranserKBPerSecond < 1000) {
-			return String.format("%.2f KB/s", this.getAverageRateOfTransfer());
+			return String.format("%.2f KB/s", this.averageRateOfTranserKBPerSecond);
 		}else if(this.averageRateOfTranserKBPerSecond < 1000000) {
 			return String.format("%.2f MB/s", this.averageRateOfTranserKBPerSecond/1000.0);
 		}else {
@@ -371,6 +379,11 @@ public class FileJob {
 		@Override
 		public void run() {
 			try {
+				if(exts.length == 0) {
+					getExtractFiles();
+				}else {
+					consolidateFiles();
+				}
 				copyFilesToDir();
 			} catch (IOException e) {
 				progressListener.notifyCurrentFile("An error occured: " + e.getMessage());
@@ -395,6 +408,11 @@ public class FileJob {
 		@Override
 		public void run() {
 			try {
+				if(exts.length == 0) {
+					getExtractFiles();
+				}else {
+					consolidateFiles();
+				}
 				moveFilesToDir();
 			} catch (IOException e) {
 				progressListener.notifyCurrentFile("An error occured: " + e.getMessage());

@@ -66,6 +66,7 @@ public class DirConController extends ControllerUtils{
 				exportDir, new String[0], copyRadioButton.isSelected());
 		FileJobDisplayer jobDisplayer = new FileJobDisplayer(job);
 		FileJobPopUpLauncher launcher = new FileJobPopUpLauncher("Exporting", jobDisplayer);
+		System.out.println("Showing ProgressBar");
 		launcher.show();
 	}
 

@@ -13,24 +13,10 @@ public class SelectedFileJob extends FileJob{
 	}
 	
 	public void executeJob() {
-		if(keepOriginalFile && exts.length == 0) {
-			super.getExtractFiles();
-			System.out.println("copying all files");
+		if(keepOriginalFile) {
 			super.executeCopy().start();
-			
-		}else if(keepOriginalFile && exts.length != 0) {
-			super.consolidateFiles();
-			System.out.println("copying select files");
-			super.executeCopy().start();
-			
-		}else if(!keepOriginalFile && exts.length == 0) {
-			super.getExtractFiles();
-			System.out.println("Moving all files");
-			super.executeMove().start();
 			
 		}else {
-			super.consolidateFiles();
-			System.out.println("Moving select files");
 			super.executeMove().start();			
 		}
 	}
