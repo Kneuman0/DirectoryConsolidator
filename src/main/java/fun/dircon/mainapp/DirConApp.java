@@ -1,8 +1,9 @@
 package fun.dircon.mainapp;
 
-import biz.ui.launchers.generic.AppLauncher;
+import biz.ui.launchers.generic.SaveableAppLauncher;
+import javafx.stage.Stage;
 
-public class DirConApp extends AppLauncher<DirConController>{
+public class DirConApp extends SaveableAppLauncher<DirConController>{
 
 	@Override
 	public String getPathtoFXML() {
@@ -17,6 +18,11 @@ public class DirConApp extends AppLauncher<DirConController>{
 	@Override
 	public void init() {
 		
+	}
+	
+	@Override
+	public void start(Stage stage){
+		super.start(stage);
 	}
 
 }

@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.math3.stat.descriptive.moment.Mean;
+
 public class FileJob {
 
 	protected List<File> files;
@@ -25,7 +27,8 @@ public class FileJob {
 	protected String[] exts;
 	protected FileJobProgressListener progressListener;
 	protected FileJobCompleteListener jobCompleteListener;
-	protected double averageRateOfTranserKBPerSecond;
+	protected boolean terminate;
+	protected Mean mean;
 
 	public FileJob(File directory, File exportLocation, String... exts) {
 		this.files = new ArrayList<>();
@@ -33,6 +36,8 @@ public class FileJob {
 		this.exportLocation = exportLocation;
 		this.exts = exts != null ? new String[0] : exts;
 		this.bytesMoved = 0;
+		this.mean = new Mean();
+		this.terminate = false;
 
 //		if (exts.length == 0) {
 //			files = getExtractFiles();
@@ -49,7 +54,6 @@ public class FileJob {
 
 		this.bytesInFileJob = new AtomicLong(bytes);
 		this.bytesMovedPerSecond = 0;
-		this.averageRateOfTranserKBPerSecond = 0;
 
 	}
 
@@ -128,6 +132,9 @@ public class FileJob {
 
 	protected void moveFilesToDir(List<File> files) throws FileNotFoundException, IOException {
 		for (File file : files) {
+			if(this.terminate) {
+				break;
+			}
 			long start = System.nanoTime();
 			long bytesInFile = file.length();
 			if (progressListener != null)
@@ -147,10 +154,10 @@ public class FileJob {
 			double elapsedSeconds = (double) (end - start) / 1000000000.0;
 			this.bytesMovedPerSecond = (double)bytesInFile / (double)elapsedSeconds;
 			this.recalculateProcessSpeed(bytesMovedPerSecond/1000.0);
-//			System.out.println("File copied successfully!");
-//			System.out.println(String.format("Rate of transfer: %.2fkb/s", bytesMovedPerSecond / 1000.0));
-//			System.out.println("Average Rate of Transfer: " + getAverageRateOfTransfer());
-//			System.out.println(String.format("Percent Complete: %d", percentComplete));
+			System.out.println("File copied successfully!");
+			System.out.println(String.format("Rate of transfer: %.2fkb/s", bytesMovedPerSecond / 1000.0));
+			System.out.println("Average Rate of Transfer: " + getAverageRateOfTransfer());
+			System.out.println(String.format("Percent Complete: %d", percentComplete));
 			if (progressListener != null)
 				progressListener.notifyProgress(String.format(
 						"Average Rate of transfer: %s\n"
@@ -171,6 +178,9 @@ public class FileJob {
 
 	protected void copyFilesToDir(File directory, List<File> files) throws FileNotFoundException, IOException {
 		for (File file : files) {
+			if(this.terminate) {
+				break;
+			}
 			long start = System.nanoTime();
 			System.out.println("Exporting File: " + file.getAbsolutePath());
 			bytesMoved += file.length()/2;
@@ -203,10 +213,11 @@ public class FileJob {
 				this.percentComplete.set(percentComplete);
 				long end = System.nanoTime();
 				double elapsedSeconds = (double) (end - start) / 1000000000.0;
-				this.bytesMovedPerSecond = (double)file.length() / (double)elapsedSeconds;
+				this.bytesMovedPerSecond = (double)bytesMoved / (double)elapsedSeconds;
 				this.recalculateProcessSpeed(bytesMovedPerSecond/1000.0);
 				System.out.println("File copied successfully!");
 				System.out.println(String.format("Rate of transfer: %.2fkb/s", bytesMovedPerSecond / 1000.0));
+				System.out.println("Average Rate of Transfer: " + getAverageRateOfTransfer());
 				System.out.println(String.format("Percent Complete: %d", percentComplete));
 				if (progressListener != null)
 					progressListener.notifyProgress(String.format(
@@ -226,13 +237,12 @@ public class FileJob {
 	}
 	
 	public void recalculateProcessSpeed(double newRateKBPerSecond) {
-		this.averageRateOfTranserKBPerSecond = 
-				(this.averageRateOfTranserKBPerSecond + newRateKBPerSecond)/2.0;
+		this.mean.increment(newRateKBPerSecond);
 	}
 	
 	public String getTimeRemaining() {
 		int secondsRemaining = (int)(((this.bytesInFileJob.get() - this.bytesMoved) / 1000.0)
-				* (1.0/averageRateOfTranserKBPerSecond));
+				* (1.0/mean.getResult()));
 		if(secondsRemaining < 1) {
 			return "less than a second";
 		}else if(secondsRemaining < 60) {
@@ -247,12 +257,12 @@ public class FileJob {
 	}
 	
 	public String getAverageRateOfTransfer() {
-		if(this.averageRateOfTranserKBPerSecond < 1000) {
-			return String.format("%.2f KB/s", this.averageRateOfTranserKBPerSecond);
-		}else if(this.averageRateOfTranserKBPerSecond < 1000000) {
-			return String.format("%.2f MB/s", this.averageRateOfTranserKBPerSecond/1000.0);
+		if(this.mean.getResult() < 1000) {
+			return String.format("%.2f KB/s", this.mean.getResult());
+		}else if(this.mean.getResult() < 1000000) {
+			return String.format("%.2f MB/s", this.mean.getResult()/1000.0);
 		}else {
-			return String.format("%.2f GB/s", this.averageRateOfTranserKBPerSecond/1000000.0);
+			return String.format("%.2f GB/s", this.mean.getResult()/1000000.0);
 		}
 	}
 
@@ -358,6 +368,36 @@ public class FileJob {
 	 */
 	public void setJobCompleteListener(FileJobCompleteListener jobCompleteListener) {
 		this.jobCompleteListener = jobCompleteListener;
+	}
+	
+	
+
+	/**
+	 * @return the terminate
+	 */
+	public boolean isTerminate() {
+		return terminate;
+	}
+
+	/**
+	 * @param terminate the terminate to set
+	 */
+	public void setTerminate(boolean terminate) {
+		this.terminate = terminate;
+	}
+
+	/**
+	 * @return the mean
+	 */
+	public Mean getMean() {
+		return mean;
+	}
+
+	/**
+	 * @param mean the mean to set
+	 */
+	public void setMean(Mean mean) {
+		this.mean = mean;
 	}
 
 	public ExecuteCopy executeCopy() {
